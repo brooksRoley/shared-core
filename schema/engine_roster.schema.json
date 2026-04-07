@@ -1,0 +1,57 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Engine Roster",
+  "description": "Data contract between NbaApi (Python) and the C++ game engine. Produced by scraper.py, consumed by GameManager::LoadRosterJSON().",
+  "type": "array",
+  "items": {
+    "type": "object",
+    "required": ["id", "name", "cost", "stats"],
+    "properties": {
+      "id": {
+        "type": "integer",
+        "description": "Unique player identifier (matches NBA player ID from nba_api)"
+      },
+      "name": {
+        "type": "string",
+        "description": "Player display name"
+      },
+      "team": {
+        "type": "string",
+        "description": "Team abbreviation (e.g. 'LAL', 'GSW'). Optional — used for franchise synergy detection.",
+        "default": ""
+      },
+      "cost": {
+        "type": "integer",
+        "minimum": 1,
+        "maximum": 5,
+        "description": "Draft cost in gold units. Derived from salary cap percentage: >=25%=5, >=15%=4, >=8%=3, >=3%=2, <3%=1"
+      },
+      "stats": {
+        "type": "object",
+        "required": ["shooting", "speed", "defense"],
+        "properties": {
+          "shooting": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 99,
+            "description": "Shooting ability. Derived from z-score of points per game: 50 + (z * 20), clamped [1, 99]"
+          },
+          "speed": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 99,
+            "description": "Movement speed. Derived from z-score of speed metric: 50 + (z * 20), clamped [1, 99]"
+          },
+          "defense": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 99,
+            "description": "Defensive ability. Derived from z-score of defensive win shares: 50 + (z * 20), clamped [1, 99]"
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "additionalProperties": false
+  }
+}
