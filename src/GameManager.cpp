@@ -169,3 +169,54 @@ void GameManager::SetPlayerCoordinates(int playerId, float offX, float offY, flo
 void GameManager::RemovePlayer(int playerId) {
     activeRoster.erase(playerId);
 }
+
+std::string GameManager::SimulateGame(uint32_t seed, int ticks) {
+    court.Clear();
+    court.Reseed(seed);
+
+    synergyEngine.AnalyzeRoster(GetActiveFloorPlayers());
+    auto buffs = synergyEngine.GetActiveBuffs();
+
+    for (auto& [id, player] : activeRoster) {
+        for (const auto& buff : buffs) {
+            player->stats.speed    += buff.speedBuff;
+            player->stats.shooting += buff.shootingBuff;
+            player->stats.defense  += buff.defenseBuff;
+            player->ClampStats();
+        }
+        float simX = player->offensivePlacement.x * 70.0f + 40.0f;
+        float simY = player->offensivePlacement.y * 70.0f + 40.0f;
+        player->pos = {simX, simY};
+        court.AddPlayer(player, /*isHome=*/true);
+    }
+
+    SpawnBotOpponents();
+    court.InitPossession();
+
+    float dt = 1.0f / 30.0f;
+    for (int i = 0; i < ticks; i++) {
+        court.UpdateSimulationStep(dt);
+    }
+
+    // Build result JSON
+    std::string json = "{";
+    json += "\"homeScore\": " + std::to_string(court.homeScore);
+    json += ", \"awayScore\": " + std::to_string(court.awayScore);
+    json += ", \"simTicks\": " + std::to_string(ticks);
+
+    // Include synergy info
+    json += ", \"synergies\": [";
+    bool first = true;
+    for (const auto& buff : buffs) {
+        if (!first) json += ", ";
+        json += "{\"name\": \"" + buff.name + "\"";
+        json += ", \"tier\": " + std::to_string(buff.tier);
+        json += ", \"shootingBuff\": " + std::to_string(buff.shootingBuff);
+        json += ", \"defenseBuff\": " + std::to_string(buff.defenseBuff);
+        json += ", \"speedBuff\": " + std::to_string(buff.speedBuff) + "}";
+        first = false;
+    }
+    json += "]}";
+
+    return json;
+}

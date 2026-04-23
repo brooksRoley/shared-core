@@ -20,6 +20,10 @@ public:
     void SetPlayerCoordinates(int playerId, float offX, float offY, float defX, float defY);
     void RemovePlayer(int playerId);
 
+    // Run a full game simulation. Returns JSON: {homeScore, awayScore, simTicks, synergies}
+    // seed: RNG seed for determinism. ticks: number of simulation steps to run.
+    std::string SimulateGame(uint32_t seed, int ticks);
+
 private:
     std::map<int, std::shared_ptr<PlayerEntity>> activeRoster;
     SynergyEngine synergyEngine;
