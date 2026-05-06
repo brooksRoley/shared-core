@@ -10,8 +10,8 @@ public:
     int teamWins;
     int teamLosses;
     int currentCapSpace;
-    static constexpr int SALARY_CAP = 136000000;
-    static constexpr int SALARY_FLOOR = 122000000;
+    static constexpr int SALARY_CAP = 151000000;
+    static constexpr int SALARY_FLOOR = 136000000;
 
     GameState();
 

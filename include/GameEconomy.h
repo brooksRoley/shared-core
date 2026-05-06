@@ -14,7 +14,7 @@ public:
     UnitCost CalculateDraftCost(double playerSalary);
 
 private:
-    static constexpr double CURRENT_SALARY_CAP = 136000000.0;
+    static constexpr double CURRENT_SALARY_CAP = 151000000.0;
 };
 
 class StatNormalizer {
