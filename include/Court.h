@@ -24,6 +24,7 @@ private:
     std::vector<std::shared_ptr<PlayerEntity>> homeTeam;
     std::vector<std::shared_ptr<PlayerEntity>> awayTeam;
     std::mt19937 rng{std::random_device{}()};
+    float stealCooldown = 0.0f;
 
     void MovePlayerToward(PlayerEntity& p, Vector2D target, float dt);
     void AttemptShot(std::shared_ptr<PlayerEntity>& shooter, bool isHomeTeam);

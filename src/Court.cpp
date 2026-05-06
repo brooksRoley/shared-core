@@ -179,15 +179,20 @@ void Court::UpdateSimulationStep(float dt) {
 
     std::uniform_real_distribution<float> roll(0.0f, 1.0f);
 
-    // ── Steal check ──────────────────────────────────────────────────────────
-    for (auto& def : opponents) {
-        float dist = carrier->pos.DistanceTo(def->pos);
-        if (dist < 40.0f) {
-            float stealChance = (def->stats.defense / 100.0f) * 0.15f * dt;
-            float proximityBonus = ((40.0f - dist) / 40.0f) * 0.1f * dt;
-            if (roll(rng) < stealChance + proximityBonus) {
-                ball.possessorId = def->id;
-                return;
+    // ── Steal check (cooldown-based, frame-rate independent) ─────────────────
+    stealCooldown -= dt;
+    if (stealCooldown <= 0.0f) {
+        stealCooldown = 2.0f;
+        for (auto& def : opponents) {
+            float dist = carrier->pos.DistanceTo(def->pos);
+            if (dist < 40.0f) {
+                float stealChance = (def->stats.defense / 100.0f) * 0.12f;
+                float proximityBonus = ((40.0f - dist) / 40.0f) * 0.08f;
+                if (roll(rng) < stealChance + proximityBonus) {
+                    ball.possessorId = def->id;
+                    stealCooldown = 2.0f;
+                    return;
+                }
             }
         }
     }

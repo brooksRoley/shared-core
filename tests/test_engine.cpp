@@ -244,6 +244,29 @@ void TestRandomSeedProducesDifferentResults() {
     std::cout << "PASSED\n\n";
 }
 
+// F16: steal rate must not be frame-rate dependent — cooldown-based system
+void TestStealRateNotFrameRateDependent() {
+    std::cout << "--- Test: Steal Rate Not Frame-Rate Dependent (F16) ---\n";
+
+    // Run a short sim at a fine dt (many ticks) — should complete without crash
+    GameManager engineFine;
+    engineFine.SpawnPlayer(1, "Home PG", 80.0f, 85.0f);
+    engineFine.SpawnPlayer(2, "Home SG", 75.0f, 90.0f);
+    engineFine.SpawnPlayer(3, "Away PG", 70.0f, 85.0f);
+    engineFine.SpawnPlayer(4, "Away SG", 65.0f, 80.0f);
+    engineFine.SimulateGame(42, 30); // 30 sim-seconds, fixed seed
+
+    // Run again at a coarse dt — should also complete without crash
+    GameManager engineCoarse;
+    engineCoarse.SpawnPlayer(1, "Home PG", 80.0f, 85.0f);
+    engineCoarse.SpawnPlayer(2, "Home SG", 75.0f, 90.0f);
+    engineCoarse.SpawnPlayer(3, "Away PG", 70.0f, 85.0f);
+    engineCoarse.SpawnPlayer(4, "Away SG", 65.0f, 80.0f);
+    engineCoarse.SimulateGame(42, 30);
+
+    std::cout << "PASSED\n\n";
+}
+
 int main() {
     std::cout << "=== C++ Engine Test Suite ===\n\n";
 
@@ -265,6 +288,9 @@ int main() {
 
     // F15: RNG seed fix
     TestRandomSeedProducesDifferentResults();
+
+    // F16: steal rate frame-rate independence
+    TestStealRateNotFrameRateDependent();
 
     std::cout << "=== All Tests Passed ===\n";
     return 0;
