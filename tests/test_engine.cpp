@@ -267,6 +267,42 @@ void TestStealRateNotFrameRateDependent() {
     std::cout << "PASSED\n\n";
 }
 
+// F5: shot zone tiers — paint > midrange > three, all in (0, 1]
+void TestShotZoneTiers() {
+    std::cout << "--- Test: Shot Zone Tiers (F5) ---\n";
+
+    // Shooter with 70 shooting; defender far away (no contest)
+    PlayerEntity shooter(1, "Zone Shooter", 50.0f, 70.0f);
+    PlayerEntity defender(2, "Far Defender", 50.0f, 50.0f);
+    defender.pos = Vector2D(25.0f, 100.0f); // far from play
+
+    Vector2D hoopPos(25.0f, 4.0f);
+
+    // Paint: 3 units from hoop
+    shooter.pos = Vector2D(25.0f, 7.0f);
+    float paintProb = CalculateShotProbability(&shooter, &defender, hoopPos);
+
+    // Midrange: 15 units from hoop
+    shooter.pos = Vector2D(25.0f, 19.0f);
+    float midProb = CalculateShotProbability(&shooter, &defender, hoopPos);
+
+    // Three-point: 25 units from hoop
+    shooter.pos = Vector2D(25.0f, 29.0f);
+    float threeProb = CalculateShotProbability(&shooter, &defender, hoopPos);
+
+    std::cout << "  Paint prob:    " << paintProb  << "\n";
+    std::cout << "  Midrange prob: " << midProb    << "\n";
+    std::cout << "  Three prob:    " << threeProb  << "\n";
+
+    assert(paintProb  > 0.0f && paintProb  <= 1.0f && "Paint prob out of (0, 1]!");
+    assert(midProb    > 0.0f && midProb    <= 1.0f && "Midrange prob out of (0, 1]!");
+    assert(threeProb  > 0.0f && threeProb  <= 1.0f && "Three prob out of (0, 1]!");
+    assert(paintProb  > midProb   && "Paint must be > midrange!");
+    assert(midProb    > threeProb && "Midrange must be > three!");
+
+    std::cout << "PASSED\n\n";
+}
+
 // F8: home court advantage — home should win more often when bonus is applied
 void TestHomeCourtAdvantage() {
     std::cout << "--- Test: Home Court Advantage (F8) ---\n";
@@ -344,6 +380,9 @@ int main() {
 
     // F16: steal rate frame-rate independence
     TestStealRateNotFrameRateDependent();
+
+    // F5: shot zone tiers
+    TestShotZoneTiers();
 
     // F8: home court advantage
     TestHomeCourtAdvantage();
