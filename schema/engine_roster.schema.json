@@ -47,7 +47,9 @@
             "minimum": 1,
             "maximum": 99,
             "description": "Defensive ability. Derived from z-score of defensive win shares: 50 + (z * 20), clamped [1, 99]"
-          }
+          },
+          "rebounding": {"type": "integer", "minimum": 1, "maximum": 99},
+          "playmaking": {"type": "integer", "minimum": 1, "maximum": 99}
         },
         "additionalProperties": false
       }

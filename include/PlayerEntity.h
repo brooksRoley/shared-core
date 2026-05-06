@@ -11,6 +11,8 @@ struct PlayerStats {
     int height_inches = 72;
     int weight_lbs = 200;
     int stamina = 100;
+    float rebounding = 50.0f;   // affects rebound priority
+    float playmaking = 50.0f;   // affects pass probability
 };
 
 enum class Position { PG, SG, SF, PF, C };

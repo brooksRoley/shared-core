@@ -140,7 +140,9 @@ void Court::AssignRebound(float dt) {
             float dist      = p->pos.DistanceTo(ballPos);
             // Taller players get a virtual distance bonus
             float heightAdj = dist - (p->stats.height_inches - 72) * 2.0f;
-            if (heightAdj < minAdj) { minAdj = heightAdj; nearest = p; }
+            // Higher rebounding stat further reduces effective distance
+            float reboundAdj = heightAdj - (p->stats.rebounding - 50.0f) * 0.5f;
+            if (reboundAdj < minAdj) { minAdj = reboundAdj; nearest = p; }
         }
     };
     check(homeTeam);
@@ -212,7 +214,9 @@ void Court::UpdateSimulationStep(float dt) {
             if (tm->id == carrier->id) continue;
             auto tmDef = FindNearestDefender(tm, isHomeCarrier);
             float openness = tmDef ? tm->pos.DistanceTo(tmDef->pos) : 200.0f;
-            if (openness > 80.0f && roll(rng) < 0.3f * dt) {
+            // playmaking=50 (default) yields 0.3; scales linearly 0.0–0.6 over [0,100]
+            float passProbability = (carrier->stats.playmaking / 100.0f) * 0.6f;
+            if (openness > 80.0f && roll(rng) < passProbability * dt) {
                 ball.possessorId = tm->id;
                 ball.position = {tm->pos.x, tm->pos.y, 0.0f};
                 return;

@@ -150,6 +150,8 @@ void GameManager::LoadRosterJSON(std::string jsonData) {
             auto player = std::make_shared<PlayerEntity>(id, name, speed, shooting);
             player->cost          = cost;
             player->stats.defense = defense;
+            if (s.contains("rebounding")) player->stats.rebounding = s["rebounding"].get<float>();
+            if (s.contains("playmaking")) player->stats.playmaking = s["playmaking"].get<float>();
             player->ClampStats();
             activeRoster[id] = player;
         }

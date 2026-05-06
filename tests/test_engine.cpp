@@ -303,6 +303,49 @@ void TestShotZoneTiers() {
     std::cout << "PASSED\n\n";
 }
 
+// F6: rebounding and playmaking stat fields exist and are settable
+void TestReboardingAndPlaymakingStats() {
+    std::cout << "--- Test: Rebounding + Playmaking Stats (F6) ---\n";
+
+    PlayerEntity p(1, "Test Player", 70.0f, 60.0f);
+
+    // Default values should be 50
+    assert(p.stats.rebounding == 50.0f && "rebounding default should be 50!");
+    assert(p.stats.playmaking == 50.0f && "playmaking default should be 50!");
+
+    // Fields must be settable
+    p.stats.rebounding = 80.0f;
+    p.stats.playmaking = 30.0f;
+    assert(p.stats.rebounding == 80.0f && "rebounding not settable!");
+    assert(p.stats.playmaking == 30.0f && "playmaking not settable!");
+
+    std::cout << "PASSED\n\n";
+}
+
+// F6: LoadRosterJSON should parse rebounding and playmaking with backwards compat
+void TestLoadRosterJSON_NewStatFields() {
+    std::cout << "--- Test: LoadRosterJSON Parses rebounding + playmaking (F6) ---\n";
+
+    GameManager engine;
+
+    // With new fields present
+    std::string jsonWithFields = R"([
+        {"id": 1, "name": "Rebounder", "cost": 3, "stats": {"shooting": 50, "speed": 50, "defense": 50, "rebounding": 85, "playmaking": 30}}
+    ])";
+    engine.LoadRosterJSON(jsonWithFields);
+    engine.TickSimulation(0.1f);
+
+    // Without new fields — backwards compat, should default to 50
+    GameManager engine2;
+    std::string jsonWithoutFields = R"([
+        {"id": 2, "name": "Legacy Player", "cost": 2, "stats": {"shooting": 60, "speed": 55, "defense": 45}}
+    ])";
+    engine2.LoadRosterJSON(jsonWithoutFields);
+    engine2.TickSimulation(0.1f);
+
+    std::cout << "PASSED\n\n";
+}
+
 // F8: home court advantage — home should win more often when bonus is applied
 void TestHomeCourtAdvantage() {
     std::cout << "--- Test: Home Court Advantage (F8) ---\n";
@@ -383,6 +426,10 @@ int main() {
 
     // F5: shot zone tiers
     TestShotZoneTiers();
+
+    // F6: rebounding + playmaking stats
+    TestReboardingAndPlaymakingStats();
+    TestLoadRosterJSON_NewStatFields();
 
     // F8: home court advantage
     TestHomeCourtAdvantage();
