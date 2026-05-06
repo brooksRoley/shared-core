@@ -24,8 +24,8 @@ void SynergyEngine::AnalyzeRoster(const std::vector<std::shared_ptr<PlayerEntity
 
     for (const auto& player : activeFloor) {
         teamCounts[player->team]++;
-        if (player->stats.height_inches >= 82) giantsCount++;
-        if (player->stats.shooting >= 85.0f) sharpshootersCount++;
+        if (player->stats.height_inches >= 80) giantsCount++;
+        if (player->stats.shooting >= 72.0f) sharpshootersCount++;
         if (player->stats.defense >= 85.0f) lockdownCount++;
         totalSpeed += player->stats.speed;
     }
@@ -53,7 +53,7 @@ void SynergyEngine::AnalyzeRoster(const std::vector<std::shared_ptr<PlayerEntity
         std::cout << "Synergy Activated: Splash Family! Limitless range unlocked.\n";
     }
 
-    if ((totalSpeed / activeFloor.size()) > 85.0f && activeFloor.size() >= 4) {
+    if ((totalSpeed / activeFloor.size()) > 68.0f && activeFloor.size() >= 4) {
         ActiveSynergy runAndGun{"7 Seconds or Less", 2, 25.0f, 10.0f, -10.0f};
         currentBuffs.push_back(runAndGun);
         std::cout << "Synergy Activated: 7 Seconds or Less! Transition speed maximized.\n";

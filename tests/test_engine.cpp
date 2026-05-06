@@ -399,6 +399,36 @@ void TestHomeCourtAdvantage() {
     std::cout << "PASSED\n\n";
 }
 
+void TestSplashFamilySynergyFires() {
+    GameManager gm;
+    // Three sharpshooters with shooting >= 72
+    gm.SpawnPlayer(1, "Shooter1", 60, 75);
+    gm.SpawnPlayer(2, "Shooter2", 60, 74);
+    gm.SpawnPlayer(3, "Shooter3", 60, 73);
+    gm.SpawnPlayer(4, "Big", 40, 50);
+    gm.SpawnPlayer(5, "Guard", 70, 60);
+
+    std::string result = gm.SimulateGame(42, 600);
+    assert(result.find("Splash Family") != std::string::npos &&
+           "Splash Family should fire with 3 players at shooting >= 72");
+    std::cout << "  PASS: TestSplashFamilySynergyFires\n";
+}
+
+void TestSevenSecondsOrLessFires() {
+    GameManager gm;
+    // Fast team with avg speed > 68
+    gm.SpawnPlayer(1, "Fast1", 75, 60);
+    gm.SpawnPlayer(2, "Fast2", 72, 60);
+    gm.SpawnPlayer(3, "Fast3", 70, 60);
+    gm.SpawnPlayer(4, "Fast4", 68, 60);
+    gm.SpawnPlayer(5, "Fast5", 65, 60);
+
+    std::string result = gm.SimulateGame(42, 600);
+    assert(result.find("7 Seconds or Less") != std::string::npos &&
+           "7SOL should fire with avg speed > 68");
+    std::cout << "  PASS: TestSevenSecondsOrLessFires\n";
+}
+
 int main() {
     std::cout << "=== C++ Engine Test Suite ===\n\n";
 
@@ -433,6 +463,10 @@ int main() {
 
     // F8: home court advantage
     TestHomeCourtAdvantage();
+
+    // F4: recalibrated synergy thresholds
+    TestSplashFamilySynergyFires();
+    TestSevenSecondsOrLessFires();
 
     std::cout << "=== All Tests Passed ===\n";
     return 0;
