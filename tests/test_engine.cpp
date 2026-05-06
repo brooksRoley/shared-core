@@ -212,6 +212,38 @@ void TestLoadRosterJSON_BadInput() {
     std::cout << "PASSED\n\n";
 }
 
+// F15: seed=0 must use random_device — two runs should differ
+void TestRandomSeedProducesDifferentResults() {
+    std::cout << "--- Test: Random Seed Produces Different Results (F15) ---\n";
+
+    auto makeResult = []() -> std::string {
+        GameManager engine;
+        engine.SpawnPlayer(1, "Home PG", 80.0f, 85.0f);
+        engine.SpawnPlayer(2, "Home SG", 75.0f, 90.0f);
+        engine.SpawnPlayer(3, "Home SF", 70.0f, 75.0f);
+        engine.SpawnPlayer(4, "Home PF", 65.0f, 60.0f);
+        engine.SpawnPlayer(5, "Home C",  55.0f, 50.0f);
+        for (int i = 1; i <= 5; i++) {
+            engine.SetPlayerCoordinates(i, float(i % 3), float(i / 3), float(i % 3), float(i / 3));
+        }
+        return engine.SimulateGame(0, 600); // seed=0 → random_device
+    };
+
+    std::string r1 = makeResult();
+    std::string r2 = makeResult();
+
+    // With true randomness, two runs should differ. We allow up to 5 retries
+    // to avoid flakiness from an astronomically unlikely collision.
+    bool differ = (r1 != r2);
+    for (int attempt = 0; !differ && attempt < 5; ++attempt) {
+        std::string r3 = makeResult();
+        differ = (r1 != r3);
+    }
+    assert(differ && "seed=0 produced identical results across runs — RNG not random!");
+
+    std::cout << "PASSED\n\n";
+}
+
 int main() {
     std::cout << "=== C++ Engine Test Suite ===\n\n";
 
@@ -230,6 +262,9 @@ int main() {
     // LoadRosterJSON tests
     TestLoadRosterJSON();
     TestLoadRosterJSON_BadInput();
+
+    // F15: RNG seed fix
+    TestRandomSeedProducesDifferentResults();
 
     std::cout << "=== All Tests Passed ===\n";
     return 0;

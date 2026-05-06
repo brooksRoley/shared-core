@@ -13,7 +13,7 @@ public:
 
     void AddPlayer(std::shared_ptr<PlayerEntity> p, bool isHome);
     void Clear();
-    void Reseed(uint32_t seed) { rng.seed(seed); }
+    void Reseed(uint32_t seed) { if (seed == 0) { rng.seed(std::random_device{}()); } else { rng.seed(seed); } }
     void InitPossession(); // Give ball to home player with highest shooting
     void UpdateSimulationStep(float dt);
 
@@ -23,7 +23,7 @@ public:
 private:
     std::vector<std::shared_ptr<PlayerEntity>> homeTeam;
     std::vector<std::shared_ptr<PlayerEntity>> awayTeam;
-    std::mt19937 rng{42};
+    std::mt19937 rng{std::random_device{}()};
 
     void MovePlayerToward(PlayerEntity& p, Vector2D target, float dt);
     void AttemptShot(std::shared_ptr<PlayerEntity>& shooter, bool isHomeTeam);
