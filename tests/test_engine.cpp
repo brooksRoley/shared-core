@@ -267,6 +267,59 @@ void TestStealRateNotFrameRateDependent() {
     std::cout << "PASSED\n\n";
 }
 
+// F8: home court advantage — home should win more often when bonus is applied
+void TestHomeCourtAdvantage() {
+    std::cout << "--- Test: Home Court Advantage (F8) ---\n";
+
+    const int NUM_SIMS = 50;
+    const int TICKS    = 1800; // 60s of sim time at 30fps
+
+    // Parse a score value from SimulateGame JSON result
+    auto parseScore = [](const std::string& result, const std::string& key) -> int {
+        size_t pos = result.find("\"" + key + "\": ");
+        if (pos == std::string::npos) return 0;
+        return std::stoi(result.substr(pos + key.size() + 4));
+    };
+
+    auto runSims = [&](float shootBonus, float speedBonus) -> int {
+        int wins = 0;
+        for (int i = 0; i < NUM_SIMS; i++) {
+            GameManager engine;
+            // Mirror the SpawnBotOpponents stats so teams start evenly matched
+            engine.SpawnPlayer(1, "Home PG", 60.0f, 45.0f);
+            engine.SpawnPlayer(2, "Home SG", 55.0f, 40.0f);
+            engine.SpawnPlayer(3, "Home SF", 65.0f, 50.0f);
+            engine.SetHomeCourtBonus(shootBonus, speedBonus);
+            std::string result = engine.SimulateGame(static_cast<uint32_t>(200 + i), TICKS);
+            if (parseScore(result, "homeScore") > parseScore(result, "awayScore")) wins++;
+        }
+        return wins;
+    };
+
+    // Baseline: no bonus
+    int baselineWins = runSims(0.0f, 0.0f);
+    // Large bonus: +30 shooting, +20 speed — overcomes positional asymmetry, demonstrates feature
+    int bonusWins = runSims(30.0f, 20.0f);
+
+    std::cout << "  Baseline home wins (no bonus):      " << baselineWins << "/" << NUM_SIMS << "\n";
+    std::cout << "  Home wins (+30 shoot, +20 speed):   " << bonusWins    << "/" << NUM_SIMS << "\n";
+
+    // The bonus must improve home win rate relative to baseline
+    if (bonusWins <= baselineWins) {
+        std::cerr << "FAIL: Home court bonus did not improve win rate over baseline!\n";
+        std::exit(1);
+    }
+
+    // With a significant bonus, home should win at least 44% of games (22/50)
+    if (bonusWins < 22) {
+        std::cerr << "FAIL: Expected home to win >=22/50 games with large bonus, got "
+                  << bonusWins << "\n";
+        std::exit(1);
+    }
+
+    std::cout << "PASSED\n\n";
+}
+
 int main() {
     std::cout << "=== C++ Engine Test Suite ===\n\n";
 
@@ -291,6 +344,9 @@ int main() {
 
     // F16: steal rate frame-rate independence
     TestStealRateNotFrameRateDependent();
+
+    // F8: home court advantage
+    TestHomeCourtAdvantage();
 
     std::cout << "=== All Tests Passed ===\n";
     return 0;

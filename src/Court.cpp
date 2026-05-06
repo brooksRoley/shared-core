@@ -18,8 +18,16 @@ static const float PX_PER_FT    = 8.25f;
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
 void Court::AddPlayer(std::shared_ptr<PlayerEntity> p, bool isHome) {
-    if (isHome) homeTeam.push_back(p);
-    else         awayTeam.push_back(p);
+    if (isHome) {
+        if (homeShootingBonus != 0.0f || homeSpeedBonus != 0.0f) {
+            p->stats.shooting += homeShootingBonus;
+            p->stats.speed    += homeSpeedBonus;
+            p->ClampStats();
+        }
+        homeTeam.push_back(p);
+    } else {
+        awayTeam.push_back(p);
+    }
 }
 
 void Court::Clear() {

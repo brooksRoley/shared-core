@@ -11,6 +11,14 @@ public:
     int awayScore = 0;
     Basketball ball;
 
+    float homeShootingBonus = 0.0f;
+    float homeSpeedBonus    = 0.0f;
+
+    void SetHomeCourtBonus(float shooting, float speed) {
+        homeShootingBonus = shooting;
+        homeSpeedBonus    = speed;
+    }
+
     void AddPlayer(std::shared_ptr<PlayerEntity> p, bool isHome);
     void Clear();
     void Reseed(uint32_t seed) { if (seed == 0) { rng.seed(std::random_device{}()); } else { rng.seed(seed); } }

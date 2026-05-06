@@ -24,6 +24,9 @@ public:
     // seed: RNG seed for determinism. ticks: number of simulation steps to run.
     std::string SimulateGame(uint32_t seed, int ticks);
 
+    // Apply a home court advantage: boosts shooting and speed for home team players.
+    void SetHomeCourtBonus(float shootingBonus, float speedBonus);
+
 private:
     std::map<int, std::shared_ptr<PlayerEntity>> activeRoster;
     SynergyEngine synergyEngine;

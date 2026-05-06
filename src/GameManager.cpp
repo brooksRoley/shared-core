@@ -170,6 +170,10 @@ void GameManager::RemovePlayer(int playerId) {
     activeRoster.erase(playerId);
 }
 
+void GameManager::SetHomeCourtBonus(float shootingBonus, float speedBonus) {
+    court.SetHomeCourtBonus(shootingBonus, speedBonus);
+}
+
 std::string GameManager::SimulateGame(uint32_t seed, int ticks) {
     court.Clear();
     court.Reseed(seed);
