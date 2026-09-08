@@ -20,6 +20,10 @@ public:
     void SetPlayerCoordinates(int playerId, float offX, float offY, float defX, float defY);
     void RemovePlayer(int playerId);
 
+    // seriesState: 0=NORMAL, 1=ELIMINATION_GAME, 2=CLOSEOUT_GAME, 3=GAME_7
+    // seriesTeam:  0=home, 1=away, -1=none. missingStars: count of OUT star cards.
+    void SetSeriesContext(int seriesState, int seriesTeam, int missingStars);
+
     // Run a full game simulation. Returns JSON: {homeScore, awayScore, simTicks, synergies}
     // seed: RNG seed for determinism. ticks: number of simulation steps to run.
     std::string SimulateGame(uint32_t seed, int ticks);

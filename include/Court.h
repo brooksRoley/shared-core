@@ -19,6 +19,12 @@ public:
         homeSpeedBonus    = speed;
     }
 
+    // Series context (Finding #17) + bench-hero escalation (Findings #18 + #44)
+    enum class SeriesState { NORMAL, ELIMINATION_GAME, CLOSEOUT_GAME, GAME_7 };
+    SeriesState seriesState = SeriesState::NORMAL;
+    int seriesTeam   = -1;  // 0 = home, 1 = away, -1 = none (at-risk team in ELIM; closing team in CLOSEOUT)
+    int missingStars = 0;   // count of drafter's star cards flagged OUT (supplied externally)
+
     void AddPlayer(std::shared_ptr<PlayerEntity> p, bool isHome);
     void Clear();
     void Reseed(uint32_t seed) { if (seed == 0) { rng.seed(std::random_device{}()); } else { rng.seed(seed); } }

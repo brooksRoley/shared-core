@@ -28,6 +28,8 @@ public:
     PlayerStats stats;
     int cost = 1;
     int currentHealth = 100;
+    bool isActive = true;
+    std::string injuryStatus;  // e.g. "Out", "Day-To-Day", "" = healthy
 
     // Spatial state
     Vector2D pos{0, 0};
@@ -42,6 +44,11 @@ public:
 
     // Ability tracking
     bool hasLimitlessRange = false;
+
+    // Bench-hero escalation (Findings #18 + #44)
+    bool  isBenchHero = false;
+    float ppgMean     = 0.0f;
+    float ppgStddev   = 0.0f;
 
     PlayerEntity() = default;
     PlayerEntity(int id, std::string name, float speed, float shooting);

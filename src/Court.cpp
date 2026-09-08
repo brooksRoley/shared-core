@@ -78,6 +78,15 @@ void Court::AttemptShot(std::shared_ptr<PlayerEntity>& shooter, bool isHomeTeam)
     Vector2D targetHoop = isHomeTeam ? AWAY_HOOP : HOME_HOOP;
     auto defender = FindNearestDefender(shooter, isHomeTeam);
 
+    // Compute board-wide average defense for the defending team (used by damage cap)
+    auto& defenders = isHomeTeam ? awayTeam : homeTeam;
+    float boardAvgDef = 50.0f;
+    if (!defenders.empty()) {
+        float totalDef = 0.0f;
+        for (auto& d : defenders) totalDef += d->stats.defense;
+        boardAvgDef = totalDef / static_cast<float>(defenders.size());
+    }
+
     // ShotProbability formula was designed for feet; scale pixel positions down
     float prob;
     if (defender) {
@@ -86,7 +95,7 @@ void Court::AttemptShot(std::shared_ptr<PlayerEntity>& shooter, bool isHomeTeam)
         scaledS.pos = {shooter->pos.x / PX_PER_FT, shooter->pos.y / PX_PER_FT};
         scaledD.pos = {defender->pos.x / PX_PER_FT, defender->pos.y / PX_PER_FT};
         Vector2D hoopFt{targetHoop.x / PX_PER_FT, targetHoop.y / PX_PER_FT};
-        prob = CalculateShotProbability(&scaledS, &scaledD, hoopFt);
+        prob = CalculateShotProbability(&scaledS, &scaledD, hoopFt, boardAvgDef);
     } else {
         prob = (shooter->stats.shooting / 100.0f) * 0.5f;
     }
@@ -94,6 +103,29 @@ void Court::AttemptShot(std::shared_ptr<PlayerEntity>& shooter, bool isHomeTeam)
     // 3-pointer if shot is taken from beyond 200px of the hoop (~24 ft)
     float distToHoop = shooter->pos.DistanceTo(targetHoop);
     int   points     = distToHoop > 200.0f ? 3 : 2;
+
+    // ── Series-state team multiplier (Finding #17) ──────────────────────────
+    if (seriesTeam == (isHomeTeam ? 0 : 1)) {
+        if      (seriesState == SeriesState::ELIMINATION_GAME) prob *= 1.03f;
+        else if (seriesState == SeriesState::CLOSEOUT_GAME)    prob *= 0.98f;
+    }
+
+    // ── Dual Bench Hero Escalation (Findings #18 + #44) ─────────────────────
+    if (shooter->isBenchHero) {
+        float benchHeroProb = (missingStars >= 2) ? 0.30f
+                            : (missingStars == 1) ? 0.15f
+                                                  : 0.05f;
+        std::uniform_real_distribution<float> heroGate(0.0f, 1.0f);
+        if (heroGate(rng) < benchHeroProb) {
+            float m   = shooter->ppgMean   > 0.0f ? shooter->ppgMean   : 10.0f;
+            float sd  = shooter->ppgStddev > 0.0f ? shooter->ppgStddev : 5.0f;
+            std::normal_distribution<float> ppgDist(m, sd);
+            float sample     = std::max(0.0f, ppgDist(rng));
+            float heroFactor = std::clamp(1.4f * (sample / m), 1.0f, 2.5f);
+            prob *= heroFactor;
+        }
+    }
+    prob = std::clamp(prob, 0.0f, 1.0f);
 
     std::uniform_real_distribution<float> roll(0.0f, 1.0f);
     bool made = roll(rng) < prob;

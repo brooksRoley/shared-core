@@ -93,15 +93,19 @@ std::vector<std::shared_ptr<PlayerEntity>> GameManager::GetActiveFloorPlayers() 
 }
 
 void GameManager::SpawnBotOpponents() {
-    // Three generic bot opponents for the away team
-    struct BotDef { int id; float startX; float startY; float speed; float shooting; float defense; };
+    // Five bot opponents modeled on a depth-first roster (OKC archetype).
+    // All five have overall rating (avg of shooting/speed/defense) >= 55,
+    // which triggers the Balanced Roster synergy for the bot team.
+    struct BotDef { int id; const char* name; float startX; float startY; float speed; float shooting; float defense; };
     static const BotDef bots[] = {
-        {901, 620.0f,  80.0f, 60.0f, 45.0f, 55.0f},
-        {902, 670.0f, 200.0f, 55.0f, 40.0f, 60.0f},
-        {903, 600.0f, 320.0f, 65.0f, 50.0f, 50.0f},
+        {901, "Bot PG", 620.0f,  60.0f, 68.0f, 58.0f, 52.0f},
+        {902, "Bot SG", 660.0f, 140.0f, 60.0f, 62.0f, 55.0f},
+        {903, "Bot SF", 640.0f, 200.0f, 58.0f, 55.0f, 60.0f},
+        {904, "Bot PF", 600.0f, 280.0f, 55.0f, 50.0f, 65.0f},
+        {905, "Bot C",  620.0f, 340.0f, 45.0f, 48.0f, 70.0f},
     };
     for (auto& def : bots) {
-        auto bot = std::make_shared<PlayerEntity>(def.id, "Bot", def.speed, def.shooting);
+        auto bot = std::make_shared<PlayerEntity>(def.id, def.name, def.speed, def.shooting);
         bot->stats.defense = def.defense;
         bot->pos = {def.startX, def.startY};
         court.AddPlayer(bot, /*isHome=*/false);
@@ -153,12 +157,41 @@ void GameManager::LoadRosterJSON(std::string jsonData) {
             if (s.contains("rebounding")) player->stats.rebounding = s["rebounding"].get<float>();
             if (s.contains("playmaking")) player->stats.playmaking = s["playmaking"].get<float>();
             player->ClampStats();
+
+            if (entry.contains("team"))
+                player->team = entry["team"].get<std::string>();
+            if (entry.contains("injury_status"))
+                player->injuryStatus = entry["injury_status"].get<std::string>();
+            if (entry.contains("is_active"))
+                player->isActive = entry["is_active"].get<bool>();
+
+            // Bench-hero escalation tags (Findings #18 + #44)
+            if (entry.contains("role"))
+                player->isBenchHero =
+                    (entry["role"].get<std::string>() == "bench_hero");
+            if (entry.contains("ppg_mean"))
+                player->ppgMean = entry["ppg_mean"].get<float>();
+            if (entry.contains("ppg_stddev"))
+                player->ppgStddev = entry["ppg_stddev"].get<float>();
+
+            // Skip injured/inactive players — they can't be drafted
+            if (!player->isActive) {
+                std::cout << "Engine: Skipped inactive player " << name << " (" << player->injuryStatus << ")\n";
+                continue;
+            }
+
             activeRoster[id] = player;
         }
         std::cout << "Engine: Loaded " << activeRoster.size() << " players from roster JSON\n";
     } catch (const json::exception& e) {
         std::cerr << "Engine: Failed to parse roster JSON: " << e.what() << "\n";
     }
+}
+
+void GameManager::SetSeriesContext(int seriesState, int seriesTeam, int missingStars) {
+    court.seriesState  = static_cast<Court::SeriesState>(seriesState);
+    court.seriesTeam   = seriesTeam;
+    court.missingStars = missingStars;
 }
 
 void GameManager::SetPlayerCoordinates(int playerId, float offX, float offY, float defX, float defY) {
