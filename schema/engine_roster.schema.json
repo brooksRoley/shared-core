@@ -62,6 +62,21 @@
         "type": "string",
         "description": "Free-text injury note ('' when healthy). Display-only.",
         "default": ""
+      },
+      "role": {
+        "type": "string",
+        "enum": ["bench_hero"],
+        "description": "Special role. 'bench_hero' enables bench-hero escalation in Court::AttemptShot (Findings #18 + #44)."
+      },
+      "ppg_mean": {
+        "type": "number",
+        "minimum": 0,
+        "description": "Season points per game. Scales bench-hero escalation; engine defaults to 10."
+      },
+      "ppg_stddev": {
+        "type": "number",
+        "minimum": 0,
+        "description": "Per-game points standard deviation for bench-hero sampling; engine defaults to 5."
       }
     },
     "additionalProperties": false

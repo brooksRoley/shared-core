@@ -54,12 +54,29 @@ void GameManager::SetAwayTeamJSON(std::string jsonData) {
             def.gridX = std::min(4.0f, std::max(0.0f, readCoord("x", "courtX", 2.0f)));
             def.gridY = std::min(4.0f, std::max(0.0f, readCoord("y", "courtY", 2.0f)));
 
+            // Bench-hero tags, same field names as engine_roster.json
+            if (entry.contains("role") && entry.at("role").is_string())
+                def.isBenchHero = entry.at("role").get<std::string>() == "bench_hero";
+            if (entry.contains("ppg_mean") && entry.at("ppg_mean").is_number())
+                def.ppgMean = entry.at("ppg_mean").get<float>();
+            if (entry.contains("ppg_stddev") && entry.at("ppg_stddev").is_number())
+                def.ppgStddev = entry.at("ppg_stddev").get<float>();
+
             pendingAwayTeam.push_back(def);
         }
         std::cout << "Engine: Loaded " << pendingAwayTeam.size() << " away units from ghost board\n";
     } catch (const json::exception& e) {
         pendingAwayTeam.clear();
         std::cerr << "Engine: Failed to parse away team JSON: " << e.what() << "\n";
+    }
+}
+
+void GameManager::SetBenchHero(int playerId, float ppgMean, float ppgStddev) {
+    auto it = activeRoster.find(playerId);
+    if (it != activeRoster.end()) {
+        it->second->isBenchHero = true;
+        it->second->ppgMean     = ppgMean;
+        it->second->ppgStddev   = ppgStddev;
     }
 }
 
@@ -204,6 +221,9 @@ void GameManager::StartRound() {
         for (const auto& def : pendingAwayTeam) {
             auto ghost = std::make_shared<PlayerEntity>(def.id, def.name, def.speed, def.shooting);
             ghost->stats.defense = def.defense;
+            ghost->isBenchHero   = def.isBenchHero;
+            ghost->ppgMean       = def.ppgMean;
+            ghost->ppgStddev     = def.ppgStddev;
             ghost->ClampStats();
             ghost->pos = PlanningToCourt(def.gridX, def.gridY, 25.0f);
             court.AddPlayer(ghost, /*isHome=*/false);

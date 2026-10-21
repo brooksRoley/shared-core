@@ -455,6 +455,36 @@ void TestGhostBoardReplacesBots() {
     std::cout << "  PASS: TestGhostBoardReplacesBots\n";
 }
 
+void TestBenchHeroTagsReachTheCourt() {
+    GameManager gm;
+    gm.SpawnUnit(1, "Starter", "", 60, 60, 60);
+    gm.SpawnUnit(2, "Sixth Man", "", 60, 60, 60);
+    gm.SetBenchHero(2, 14.5f, 6.0f);
+    gm.SetBenchHero(99, 1.0f, 1.0f); // unknown id: ignored
+    gm.SetAwayTeamJSON(R"([
+        {"name": "Ghost Hero", "role": "bench_hero", "ppg_mean": 12, "ppg_stddev": 4},
+        {"name": "Ghost Plain"}
+    ])");
+    gm.StartRound();
+
+    int homeHeroes = 0, awayHeroes = 0;
+    for (auto& p : gm.GetCourt().GetHomeTeam()) {
+        if (p->isBenchHero) {
+            homeHeroes++;
+            assert(p->id == 2 && p->ppgMean == 14.5f && p->ppgStddev == 6.0f);
+        }
+    }
+    for (auto& p : gm.GetCourt().GetAwayTeam()) {
+        if (p->isBenchHero) {
+            awayHeroes++;
+            assert(p->name == "Ghost Hero" && p->ppgMean == 12.0f);
+        }
+    }
+    assert(homeHeroes == 1 && "SetBenchHero should tag exactly the named home unit");
+    assert(awayHeroes == 1 && "ghost role field should tag exactly one away unit");
+    std::cout << "  PASS: TestBenchHeroTagsReachTheCourt\n";
+}
+
 int main() {
     std::cout << "=== C++ Engine Test Suite ===\n\n";
 
@@ -494,6 +524,7 @@ int main() {
     TestSplashFamilySynergyFires();
     TestSevenSecondsOrLessFires();
     TestGhostBoardReplacesBots();
+    TestBenchHeroTagsReachTheCourt();
 
     std::cout << "=== All Tests Passed ===\n";
     return 0;

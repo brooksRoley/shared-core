@@ -20,6 +20,11 @@ public:
     // "units" array). Replaces the hardcoded bot opponents on the next
     // StartRound(). Pass "[]" / bad JSON to fall back to default bots.
     void SetAwayTeamJSON(std::string jsonData);
+    // Tag a spawned home unit as a bench hero (roster role "bench_hero") so
+    // the escalation in Court::AttemptShot can fire for it.
+    void SetBenchHero(int playerId, float ppgMean, float ppgStddev);
+    // Read-only view of the live court (tests, tooling)
+    const Court& GetCourt() const { return court; }
     void SetPlayerPlay(int playerId, int actionTypeInt, float targetX, float targetY);
     void TickSimulation(float deltaTime);
     std::string GetGameStateJSON();
@@ -48,6 +53,9 @@ private:
         float defense = 45.0f;
         float gridX = 2.0f; // planning-grid coords (0-4), mirrored to right half
         float gridY = 2.0f;
+        bool  isBenchHero = false;
+        float ppgMean = 0.0f;
+        float ppgStddev = 0.0f;
     };
 
     static Vector2D PlanningToCourt(float gridX, float gridY, float towardHoop);
