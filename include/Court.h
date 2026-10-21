@@ -2,6 +2,7 @@
 #include <vector>
 #include <memory>
 #include <random>
+#include <map>
 #include "PlayerEntity.h"
 #include "Basketball.h"
 
@@ -9,6 +10,7 @@ class Court {
 public:
     int homeScore = 0;
     int awayScore = 0;
+    int lastScorerId = -1;  // id of the player who made the most recent basket
     Basketball ball;
 
     float homeShootingBonus = 0.0f;
@@ -39,6 +41,9 @@ private:
     std::vector<std::shared_ptr<PlayerEntity>> awayTeam;
     std::mt19937 rng{std::random_device{}()};
     float stealCooldown = 0.0f;
+    std::map<int, size_t> spotOf;  // player id -> offensive spot slot (0-4)
+
+    void AssignSpots();
 
     void MovePlayerToward(PlayerEntity& p, Vector2D target, float dt);
     void AttemptShot(std::shared_ptr<PlayerEntity>& shooter, bool isHomeTeam);

@@ -5,7 +5,8 @@
 static float ComputeShotProb(PlayerEntity* shooter, PlayerEntity* nearestDefender, Vector2D hoopPos, float effectiveDefense) {
     float distToHoop = shooter->pos.DistanceTo(hoopPos);
     float defenderProximity = shooter->pos.DistanceTo(nearestDefender->pos);
-    float skill = shooter->stats.shooting / 100.0f;
+    // 50 shooting = league average; 99 is ~1.5x it, 1 is ~0.5x
+    float skill = 0.5f + shooter->stats.shooting / 100.0f;
 
     float baseProb;
     if (distToHoop < 8.0f) {

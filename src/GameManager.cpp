@@ -135,7 +135,8 @@ std::string GameManager::GetGameStateJSON() {
 
     // Scores
     json += "\"homeScore\": " + std::to_string(court.homeScore) +
-            ", \"awayScore\": " + std::to_string(court.awayScore) + " }";
+            ", \"awayScore\": " + std::to_string(court.awayScore) +
+            ", \"lastScorerId\": " + std::to_string(court.lastScorerId) + " }";
 
     return json;
 }
@@ -169,6 +170,15 @@ void GameManager::SpawnBotOpponents() {
     }
 }
 
+// The planning board is the home team's attacking half-court, drawn with the
+// hoop at the bottom: grid x (0-4) runs sideline to sideline, grid y (0-4)
+// runs from half court (0) to the baseline (4). Home attacks the right hoop
+// (x=770). towardHoop nudges a position closer to the baseline.
+Vector2D GameManager::PlanningToCourt(float gridX, float gridY, float towardHoop) {
+    float depth = 40.0f + (4.0f - gridY) * 75.0f - towardHoop; // px out from the hoop
+    return {770.0f - depth, 40.0f + gridX * 80.0f};
+}
+
 void GameManager::StartRound() {
     court.Clear();
 
@@ -183,22 +193,19 @@ void GameManager::StartRound() {
             player->ClampStats();
         }
 
-        // Map planning-grid placement (0-4) to left-half sim coordinates
-        float simX = player->offensivePlacement.x * 70.0f + 40.0f;
-        float simY = player->offensivePlacement.y * 70.0f + 40.0f;
-        player->pos = {simX, simY};
+        player->pos = PlanningToCourt(player->offensivePlacement.x, player->offensivePlacement.y, 0.0f);
 
         court.AddPlayer(player, /*isHome=*/true);
     }
 
     if (!pendingAwayTeam.empty()) {
-        // Ghost board loaded via SetAwayTeamJSON: mirror planning-grid
-        // placements onto the right half of the 800x400 sim court.
+        // Ghost board loaded via SetAwayTeamJSON: the away team opens on
+        // defense, each ghost a step toward the hoop from its planning cell.
         for (const auto& def : pendingAwayTeam) {
             auto ghost = std::make_shared<PlayerEntity>(def.id, def.name, def.speed, def.shooting);
             ghost->stats.defense = def.defense;
             ghost->ClampStats();
-            ghost->pos = {800.0f - (def.gridX * 70.0f + 40.0f), def.gridY * 70.0f + 40.0f};
+            ghost->pos = PlanningToCourt(def.gridX, def.gridY, 25.0f);
             court.AddPlayer(ghost, /*isHome=*/false);
         }
     } else {

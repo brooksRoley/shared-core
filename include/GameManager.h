@@ -50,6 +50,8 @@ private:
         float gridY = 2.0f;
     };
 
+    static Vector2D PlanningToCourt(float gridX, float gridY, float towardHoop);
+
     std::map<int, std::shared_ptr<PlayerEntity>> activeRoster;
     std::vector<AwayUnitDef> pendingAwayTeam;
     SynergyEngine synergyEngine;

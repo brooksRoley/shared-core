@@ -8,5 +8,8 @@ public:
     bool isPossessed = false;
     int possessorId = -1;
 
+    // Sim units: court pixels horizontally, abstract height units for z
+    static constexpr float GRAVITY = 30.0f;
+
     void UpdatePhysics(float deltaTime);
 };
