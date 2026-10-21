@@ -7,6 +7,62 @@ void GameManager::SpawnPlayer(int id, std::string name, float speed, float shoot
     std::cout << "Engine: Spawned " << activeRoster[id]->name << " into the simulation.\n";
 }
 
+void GameManager::SpawnUnit(int id, std::string name, std::string team,
+                            float speed, float shooting, float defense) {
+    auto player = std::make_shared<PlayerEntity>(id, std::move(name), speed, shooting);
+    player->team          = std::move(team);
+    player->stats.defense = defense;
+    player->ClampStats();
+    activeRoster[id] = player;
+    std::cout << "Engine: Spawned " << activeRoster[id]->name << " into the simulation.\n";
+}
+
+void GameManager::SetAwayTeamJSON(std::string jsonData) {
+    using json = nlohmann::json;
+    pendingAwayTeam.clear();
+    try {
+        auto parsed = json::parse(jsonData);
+        // Accept either a bare array of units or {"units": [...]}
+        json units = parsed.is_array() ? parsed
+                   : (parsed.is_object() && parsed.contains("units")) ? parsed.at("units")
+                   : json::array();
+
+        int nextId = 901;
+        for (auto& entry : units) {
+            if (!entry.is_object()) continue;
+            AwayUnitDef def;
+
+            // Ghost ids come from another player's board and may collide with
+            // home unit ids (or be strings, e.g. "bot_1") — always remap.
+            def.id = nextId++;
+
+            if (entry.contains("name") && entry.at("name").is_string()) {
+                def.name = entry.at("name").get<std::string>();
+            }
+            if (entry.contains("stats") && entry.at("stats").is_object()) {
+                auto& s = entry.at("stats");
+                if (s.contains("speed"))    def.speed    = s.at("speed").get<float>();
+                if (s.contains("shooting")) def.shooting = s.at("shooting").get<float>();
+                if (s.contains("defense"))  def.defense  = s.at("defense").get<float>();
+            }
+            // Grid coords: accept x/y or courtX/courtY, clamp to the 0-4 grid
+            auto readCoord = [&entry](const char* a, const char* b, float fallback) {
+                if (entry.contains(a) && entry.at(a).is_number()) return entry.at(a).get<float>();
+                if (entry.contains(b) && entry.at(b).is_number()) return entry.at(b).get<float>();
+                return fallback;
+            };
+            def.gridX = std::min(4.0f, std::max(0.0f, readCoord("x", "courtX", 2.0f)));
+            def.gridY = std::min(4.0f, std::max(0.0f, readCoord("y", "courtY", 2.0f)));
+
+            pendingAwayTeam.push_back(def);
+        }
+        std::cout << "Engine: Loaded " << pendingAwayTeam.size() << " away units from ghost board\n";
+    } catch (const json::exception& e) {
+        pendingAwayTeam.clear();
+        std::cerr << "Engine: Failed to parse away team JSON: " << e.what() << "\n";
+    }
+}
+
 void GameManager::SetPlayerPlay(int playerId, int actionTypeInt, float targetX, float targetY) {
     auto it = activeRoster.find(playerId);
     if (it != activeRoster.end()) {
@@ -63,6 +119,7 @@ std::string GameManager::GetGameStateJSON() {
     for (auto& p : court.GetAwayTeam()) {
         if (!first) json += ", ";
         json += "{\"id\": " + std::to_string(p->id) +
+                ", \"name\": \"" + p->name + "\"" +
                 ", \"x\": " + std::to_string(p->pos.x) +
                 ", \"y\": " + std::to_string(p->pos.y) + "}";
         first = false;
@@ -134,7 +191,19 @@ void GameManager::StartRound() {
         court.AddPlayer(player, /*isHome=*/true);
     }
 
-    SpawnBotOpponents();
+    if (!pendingAwayTeam.empty()) {
+        // Ghost board loaded via SetAwayTeamJSON: mirror planning-grid
+        // placements onto the right half of the 800x400 sim court.
+        for (const auto& def : pendingAwayTeam) {
+            auto ghost = std::make_shared<PlayerEntity>(def.id, def.name, def.speed, def.shooting);
+            ghost->stats.defense = def.defense;
+            ghost->ClampStats();
+            ghost->pos = {800.0f - (def.gridX * 70.0f + 40.0f), def.gridY * 70.0f + 40.0f};
+            court.AddPlayer(ghost, /*isHome=*/false);
+        }
+    } else {
+        SpawnBotOpponents();
+    }
     court.InitPossession();
 }
 

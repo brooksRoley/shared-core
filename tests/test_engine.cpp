@@ -430,6 +430,31 @@ void TestSevenSecondsOrLessFires() {
     std::cout << "  PASS: TestSevenSecondsOrLessFires\n";
 }
 
+void TestGhostBoardReplacesBots() {
+    GameManager gm;
+    gm.SpawnUnit(1, "Home", "LAL", 60, 60, 60);
+    gm.SetPlayerPlay(1, 0, 3.0f, 2.0f);
+    // Colliding id and string id both get remapped into the 901+ range
+    gm.SetAwayTeamJSON(R"({"units": [
+        {"id": 1, "name": "Ghost A", "stats": {"speed": 50, "shooting": 70, "defense": 40}, "x": 0, "y": 0},
+        {"id": "bot_1", "name": "Ghost B", "courtX": 9, "courtY": -3}
+    ]})");
+    gm.StartRound();
+    std::string state = gm.GetGameStateJSON();
+    assert(state.find("Ghost A") != std::string::npos && "ghost unit should be on the away team");
+    assert(state.find("Ghost B") != std::string::npos && "ghost unit should be on the away team");
+    assert(state.find("\"id\": 901") != std::string::npos && "ghost ids should be remapped");
+
+    // Bad JSON falls back to the default bots
+    GameManager fallback;
+    fallback.SpawnUnit(1, "Home", "", 60, 60, 60);
+    fallback.SetAwayTeamJSON("not json");
+    fallback.StartRound();
+    assert(fallback.GetGameStateJSON().find("Ghost") == std::string::npos &&
+           "bad ghost JSON should fall back to bots");
+    std::cout << "  PASS: TestGhostBoardReplacesBots\n";
+}
+
 int main() {
     std::cout << "=== C++ Engine Test Suite ===\n\n";
 
@@ -468,6 +493,7 @@ int main() {
     // F4: recalibrated synergy thresholds
     TestSplashFamilySynergyFires();
     TestSevenSecondsOrLessFires();
+    TestGhostBoardReplacesBots();
 
     std::cout << "=== All Tests Passed ===\n";
     return 0;

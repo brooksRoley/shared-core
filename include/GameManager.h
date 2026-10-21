@@ -12,6 +12,14 @@ public:
     GameManager() = default;
 
     void SpawnPlayer(int id, std::string name, float speed, float shooting);
+    // Full-stat spawn used by the autochess client: includes team (for
+    // franchise synergies) and defense so home units carry real stats.
+    void SpawnUnit(int id, std::string name, std::string team,
+                   float speed, float shooting, float defense);
+    // Load the ghost opponent board (JSON array of units, or an object with a
+    // "units" array). Replaces the hardcoded bot opponents on the next
+    // StartRound(). Pass "[]" / bad JSON to fall back to default bots.
+    void SetAwayTeamJSON(std::string jsonData);
     void SetPlayerPlay(int playerId, int actionTypeInt, float targetX, float targetY);
     void TickSimulation(float deltaTime);
     std::string GetGameStateJSON();
@@ -32,7 +40,18 @@ public:
     void SetHomeCourtBonus(float shootingBonus, float speedBonus);
 
 private:
+    struct AwayUnitDef {
+        int id = 0;
+        std::string name = "Ghost";
+        float speed = 45.0f;
+        float shooting = 45.0f;
+        float defense = 45.0f;
+        float gridX = 2.0f; // planning-grid coords (0-4), mirrored to right half
+        float gridY = 2.0f;
+    };
+
     std::map<int, std::shared_ptr<PlayerEntity>> activeRoster;
+    std::vector<AwayUnitDef> pendingAwayTeam;
     SynergyEngine synergyEngine;
     Court court;
 

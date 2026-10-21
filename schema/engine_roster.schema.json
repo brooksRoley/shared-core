@@ -52,6 +52,16 @@
           "playmaking": {"type": "integer", "minimum": 1, "maximum": 99}
         },
         "additionalProperties": false
+      },
+      "is_active": {
+        "type": "boolean",
+        "description": "False when the player is currently unavailable (waived, two-way inactive). Client filters these out of the shop.",
+        "default": true
+      },
+      "injury_status": {
+        "type": "string",
+        "description": "Free-text injury note ('' when healthy). Display-only.",
+        "default": ""
       }
     },
     "additionalProperties": false
