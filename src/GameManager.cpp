@@ -148,7 +148,9 @@ std::string GameManager::GetGameStateJSON() {
             ", \"y\": " + std::to_string(court.ball.position.y) +
             ", \"z\": " + std::to_string(court.ball.position.z) +
             ", \"isPossessed\": " + (court.ball.isPossessed ? "true" : "false") +
-            ", \"possessorId\": " + std::to_string(court.ball.possessorId) + "}, ";
+            ", \"possessorId\": " + std::to_string(court.ball.possessorId) +
+            ", \"flight\": \"" + (court.ball.flight == Basketball::Flight::SHOT ? "shot"
+                                   : court.ball.flight == Basketball::Flight::PASS ? "pass" : "none") + "\"}, ";
 
     // Scores
     json += "\"homeScore\": " + std::to_string(court.homeScore) +
