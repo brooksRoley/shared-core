@@ -41,9 +41,30 @@ private:
     std::vector<std::shared_ptr<PlayerEntity>> awayTeam;
     std::mt19937 rng{std::random_device{}()};
     float stealCooldown = 0.0f;
+    float passCooldown  = 0.0f;   // catch-and-go: no pass right after a catch
     std::map<int, size_t> spotOf;  // player id -> offensive spot slot (0-4)
 
     void AssignSpots();
+
+    // A shot is decided at release and resolved when the ball reaches the rim:
+    // the points (or the carom) happen on arrival, so the score, the rim
+    // effects and the ball all land together.
+    struct ShotFlight { bool made = false; bool home = false; int points = 0; int shooterId = -1;
+                        float timeLeft = 0.0f; Vector2D hoop{0, 0}; };
+    ShotFlight shot;
+    // A pass travels; the receiver is chased, since he keeps moving.
+    struct PassFlight { int receiverId = -1; int passerId = -1; bool home = false; float t = 0.0f;
+                        float duration = 0.0f; Vector2D from{0, 0}; };
+    PassFlight pass;
+
+    void StepPlay(float dt);
+    void UpdateShotFlight(float dt);
+    void UpdatePassFlight(float dt);
+    void PositionTeams(std::vector<std::shared_ptr<PlayerEntity>>& team,
+                       std::vector<std::shared_ptr<PlayerEntity>>& opponents,
+                       const std::shared_ptr<PlayerEntity>& focus, Vector2D targetHoop, float dt);
+    void ResolveOverlaps();
+    std::shared_ptr<PlayerEntity> FindPlayer(int id, bool* isHome = nullptr);
 
     void MovePlayerToward(PlayerEntity& p, Vector2D target, float dt);
     void AttemptShot(std::shared_ptr<PlayerEntity>& shooter, bool isHomeTeam);

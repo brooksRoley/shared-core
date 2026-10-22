@@ -26,9 +26,35 @@ static const float EDGE         = 10.0f;
 static const float THREE_LINE   = 200.0f;
 static const float THREE_MAX    = 250.0f;
 static const float THREE_OPEN   = 50.0f;
-// Miss arc: ~1.1s hang time, ~7.4 apex (the client lifts the ball 3px per z)
+// Release height of a shot (the client lifts the ball 3px per z)
 static const float ARC_Z0       = 5.0f;
-static const float ARC_VZ       = 12.0f;
+// Ball flight. Shots reach the rim (RIM_Z, ~24 px of client lift) in a hang
+// time that grows with distance; a miss caroms off the rim into a rebound.
+// Passes travel at PASS_SPEED with a low arc.
+static const float RIM_Z            = 8.0f;
+static const float SHOT_HANG_BASE   = 0.35f;   // s
+static const float SHOT_HANG_PER_PX = 1.0f / 800.0f;
+static const float CAROM_VZ         = 7.0f;
+static const float CAROM_SPREAD     = 50.0f;
+static const float PASS_SPEED       = 700.0f;  // px/s
+// After a catch the receiver attacks before he can pass again.
+static const float CATCH_AND_GO     = 0.6f;    // s
+static const float PASS_MIN_TIME    = 0.15f;   // s
+static const float PASS_ARC_Z       = 1.5f;
+// Movement. Players accelerate toward a desired velocity instead of snapping
+// to full speed, slow down within ARRIVE_RADIUS of their target, and are kept
+// MIN_SEPARATION apart (tokens are ~30 px across) so nobody stacks.
+static const float ACCEL_PER_SPEED  = 8.0f;    // full speed in ~1/8 s
+static const float ARRIVE_RADIUS    = 24.0f;
+static const float MIN_SEPARATION   = 24.0f;
+// The ball carrier has right of way: in a pair with him only the other
+// player gives ground, so a drive moves at full speed. He keeps a slightly
+// smaller gap than everyone else, about where his defender's guard spot
+// already sits (30 px). Tighter, and the defender ends up pinned inside the
+// shot-contest radius on every shot: at 10 px, accuracy fell from ~54% to ~45%.
+static const float CARRIER_CONTACT  = 26.0f;
+// A loose ball on the floor rolls to a stop instead of halting dead.
+static const float ROLL_DAMPING     = 3.0f;    // 1/s
 
 static Vector2D ClampToCourt(Vector2D v) {
     return {std::clamp(v.x, EDGE, COURT_W - EDGE), std::clamp(v.y, EDGE, COURT_H - EDGE)};
@@ -68,6 +94,9 @@ void Court::Clear() {
     awayScore = 0;
     lastScorerId = -1;
     spotOf.clear();
+    shot = ShotFlight{};
+    pass = PassFlight{};
+    passCooldown = 0.0f;
 }
 
 void Court::AssignSpots() {
@@ -119,12 +148,20 @@ void Court::InitPossession() {
 }
 
 void Court::MovePlayerToward(PlayerEntity& p, Vector2D target, float dt) {
-    Vector2D dir  = target - p.pos;
-    float    dist = dir.Magnitude();
-    if (dist < 2.0f) return;
-    // Max speed 200 px/s scaled by the player's speed stat
-    float step = (p.stats.speed / 100.0f) * 200.0f * dt;
-    p.pos = ClampToCourt(p.pos + dir.Normalize() * std::min(step, dist));
+    // Steering: accelerate toward a desired velocity (top speed 200 px/s
+    // scaled by the speed stat), easing off inside ARRIVE_RADIUS so players
+    // settle on their spot instead of snapping onto it.
+    Vector2D dir      = target - p.pos;
+    float    dist     = dir.Magnitude();
+    float    maxSpeed = (p.stats.speed / 100.0f) * 200.0f;
+    Vector2D desired  = dist < 2.0f
+        ? Vector2D{0.0f, 0.0f}
+        : dir.Normalize() * (maxSpeed * std::min(1.0f, dist / ARRIVE_RADIUS));
+    Vector2D dv    = desired - p.velocity;
+    float    maxDv = maxSpeed * ACCEL_PER_SPEED * dt;
+    if (dv.Magnitude() > maxDv) dv = dv.Normalize() * maxDv;
+    p.velocity = p.velocity + dv;
+    p.pos = ClampToCourt(p.pos + p.velocity * dt);
 }
 
 std::shared_ptr<PlayerEntity> Court::FindNearestDefender(
@@ -198,37 +235,22 @@ void Court::AttemptShot(std::shared_ptr<PlayerEntity>& shooter, bool isHomeTeam)
     std::uniform_real_distribution<float> roll(0.0f, 1.0f);
     bool made = roll(rng) < prob;
 
-    if (made) {
-        lastScorerId = shooter->id;
-        if (isHomeTeam) homeScore += points;
-        else             awayScore += points;
-        // Hand ball to the other team at mid-court
-        ball.position  = {400.0f, 200.0f, 0.0f};
-        ball.velocity  = {0.0f,   0.0f,   0.0f};
-        auto& nextTeam = isHomeTeam ? awayTeam : homeTeam;
-        if (!nextTeam.empty()) {
-            ball.isPossessed = true;
-            ball.possessorId = nextTeam[0]->id;
-        } else {
-            ball.isPossessed = false;
-        }
-    } else {
-        // Miss: launch ball on arc toward the hoop area for a rebound. The
-        // landing spot stays on the floor, and horizontal velocity is sized to
-        // the arc's real hang time so the ball lands where it was aimed.
-        std::uniform_real_distribution<float> spread(-50.0f, 50.0f);
-        ball.isPossessed = false;
-        ball.possessorId = -1;
-        Vector2D land = ClampToCourt({targetHoop.x + spread(rng), targetHoop.y + spread(rng)});
-        const float g = Basketball::GRAVITY;
-        float flightTime = (ARC_VZ + std::sqrt(ARC_VZ * ARC_VZ + 2.0f * g * ARC_Z0)) / g;
-        ball.position = {shooter->pos.x, shooter->pos.y, ARC_Z0};
-        ball.velocity = {
-            (land.x - shooter->pos.x) / flightTime,
-            (land.y - shooter->pos.y) / flightTime,
-            ARC_VZ  // upward arc
-        };
-    }
+    // The shot is decided now and resolved when the ball reaches the rim
+    // (UpdateShotFlight): the ball travels a real arc, and the points land
+    // with it. Hang time grows with distance.
+    Vector2D from{shooter->pos.x, shooter->pos.y};
+    float hang = SHOT_HANG_BASE + from.DistanceTo(targetHoop) * SHOT_HANG_PER_PX;
+    const float g = Basketball::GRAVITY;
+    shot = ShotFlight{made, isHomeTeam, points, shooter->id, hang, targetHoop};
+    ball.isPossessed = false;
+    ball.possessorId = -1;
+    ball.flight      = Basketball::Flight::SHOT;
+    ball.position    = {from.x, from.y, ARC_Z0};
+    ball.velocity    = {
+        (targetHoop.x - from.x) / hang,
+        (targetHoop.y - from.y) / hang,
+        (RIM_Z - ARC_Z0 + 0.5f * g * hang * hang) / hang,   // reaches RIM_Z at t = hang
+    };
 }
 
 // ── Rebound ───────────────────────────────────────────────────────────────────
@@ -264,6 +286,18 @@ void Court::AssignRebound(float dt) {
 // ── Main sim step ─────────────────────────────────────────────────────────────
 
 void Court::UpdateSimulationStep(float dt) {
+    StepPlay(dt);
+    ResolveOverlaps();
+    // A held ball rides with its carrier, after separation has moved him.
+    if (ball.isPossessed) {
+        if (auto carrier = FindPlayer(ball.possessorId)) ball.position = {carrier->pos.x, carrier->pos.y, 0.0f};
+    }
+}
+
+void Court::StepPlay(float dt) {
+    if (ball.flight == Basketball::Flight::SHOT) { UpdateShotFlight(dt); return; }
+    if (ball.flight == Basketball::Flight::PASS) { UpdatePassFlight(dt); return; }
+
     // Loose ball: apply physics and try to assign rebound once ball lands
     if (!ball.isPossessed) {
         ball.UpdatePhysics(dt);
@@ -271,9 +305,10 @@ void Court::UpdateSimulationStep(float dt) {
         ball.position.x = onFloor.x;
         ball.position.y = onFloor.y;
         if (ball.position.z <= 0.5f) {
-            // Ball is down: it stops rolling so the rebound is contestable
-            ball.velocity.x = 0.0f;
-            ball.velocity.y = 0.0f;
+            // On the floor it rolls to a stop while players go get it
+            float roll = std::exp(-ROLL_DAMPING * dt);
+            ball.velocity.x *= roll;
+            ball.velocity.y *= roll;
             AssignRebound(dt);
         }
         return;
@@ -324,16 +359,26 @@ void Court::UpdateSimulationStep(float dt) {
 
     // ── Pass check (under defensive pressure) ────────────────────────────────
     auto nearestDef = FindNearestDefender(carrier, isHomeCarrier);
-    if (nearestDef && carrier->pos.DistanceTo(nearestDef->pos) < 60.0f) {
+    passCooldown -= dt;
+    if (passCooldown <= 0.0f && nearestDef && carrier->pos.DistanceTo(nearestDef->pos) < 60.0f) {
         for (auto& tm : team) {
             if (tm->id == carrier->id) continue;
             auto tmDef = FindNearestDefender(tm, isHomeCarrier);
             float openness = tmDef ? tm->pos.DistanceTo(tmDef->pos) : 200.0f;
-            // playmaking=50 (default) yields 0.3; scales linearly 0.0–0.6 over [0,100]
-            float passProbability = (carrier->stats.playmaking / 100.0f) * 0.6f;
+            // playmaking=50 (default) yields 0.225; scales linearly 0.0–0.45 over
+            // [0,100]. Lower than when passes were instant: a pass now spends
+            // real time in the air.
+            float passProbability = (carrier->stats.playmaking / 100.0f) * 0.45f;
             if (openness > PASS_OPEN && roll(rng) < passProbability * dt) {
-                ball.possessorId = tm->id;
-                ball.position = {tm->pos.x, tm->pos.y, 0.0f};
+                // The pass travels (UpdatePassFlight) instead of teleporting.
+                Vector2D from{carrier->pos.x, carrier->pos.y};
+                pass = PassFlight{tm->id, carrier->id, isHomeCarrier, 0.0f,
+                                  std::max(PASS_MIN_TIME, from.DistanceTo(tm->pos) / PASS_SPEED), from};
+                ball.isPossessed = false;
+                ball.possessorId = -1;
+                ball.flight      = Basketball::Flight::PASS;
+                ball.position    = {from.x, from.y, 0.0f};
+                ball.velocity    = {0.0f, 0.0f, 0.0f};
                 return;
             }
         }
@@ -356,11 +401,24 @@ void Court::UpdateSimulationStep(float dt) {
         return;
     }
 
+    PositionTeams(team, opponents, carrier, targetHoop, dt);
+}
+
+// ── Positioning ──────────────────────────────────────────────────────────────
+
+// The offense spreads to its spots around `focus` (the ball carrier, or the
+// shooter / pass receiver while the ball is in the air) and the defense plays
+// man-to-man, the on-ball defender on `focus`.
+void Court::PositionTeams(std::vector<std::shared_ptr<PlayerEntity>>& team,
+                          std::vector<std::shared_ptr<PlayerEntity>>& opponents,
+                          const std::shared_ptr<PlayerEntity>& focus, Vector2D targetHoop, float dt) {
+    const bool attackRight = targetHoop.x > COURT_W / 2.0f;   // home attacks the right hoop
+
     // ── Teammates spread to offensive spots ──────────────────────────────────
     for (size_t i = 0; i < team.size(); i++) {
-        if (team[i]->id == carrier->id) continue;
+        if (team[i]->id == focus->id) continue;
         auto slot = spotOf.find(team[i]->id);
-        MovePlayerToward(*team[i], OffensiveSpot(slot != spotOf.end() ? slot->second : i, isHomeCarrier), dt);
+        MovePlayerToward(*team[i], OffensiveSpot(slot != spotOf.end() ? slot->second : i, attackRight), dt);
     }
 
     // ── Opponents defend man-to-man ──────────────────────────────────────────
@@ -385,8 +443,8 @@ void Court::UpdateSimulationStep(float dt) {
         attackerTaken[ba] = true;
     }
     for (size_t d = 0; d < opponents.size(); d++) {
-        auto mark = marks[d] ? marks[d] : carrier;
-        float sag = (mark->id == carrier->id) ? 30.0f : 70.0f;
+        auto mark = marks[d] ? marks[d] : focus;
+        float sag = (mark->id == focus->id) ? 30.0f : 70.0f;
         Vector2D toHoop = targetHoop - mark->pos;
         float    mag    = toHoop.Magnitude();
         Vector2D guardSpot = mag > 0
@@ -394,4 +452,132 @@ void Court::UpdateSimulationStep(float dt) {
             : mark->pos;
         MovePlayerToward(*opponents[d], guardSpot, dt);
     }
+}
+
+// ── Ball in flight ───────────────────────────────────────────────────────────
+
+void Court::UpdateShotFlight(float dt) {
+    ball.UpdatePhysics(dt);
+    auto& team     = shot.home ? homeTeam : awayTeam;
+    auto& defense  = shot.home ? awayTeam : homeTeam;
+    if (auto shooter = FindPlayer(shot.shooterId)) PositionTeams(team, defense, shooter, shot.hoop, dt);
+
+    shot.timeLeft -= dt;
+    if (shot.timeLeft > 0.0f) return;
+
+    ball.flight = Basketball::Flight::NONE;
+    if (shot.made) {
+        lastScorerId = shot.shooterId;
+        if (shot.home) homeScore += shot.points;
+        else           awayScore += shot.points;
+        // Inbound: the defender nearest the basket takes it out, so the ball
+        // goes to a player already there instead of jumping to mid-court.
+        std::shared_ptr<PlayerEntity> inbounder;
+        float best = std::numeric_limits<float>::max();
+        for (auto& p : defense) {
+            float d = p->pos.DistanceTo(shot.hoop);
+            if (d < best) { best = d; inbounder = p; }
+        }
+        ball.velocity = {0.0f, 0.0f, 0.0f};
+        // ...and outlets it to the teammate furthest up the floor, a pass in
+        // flight like any other, instead of walking it the length of the court.
+        Vector2D attackHoop = shot.home ? HOME_HOOP : AWAY_HOOP;   // the inbounding side attacks the other way
+        std::shared_ptr<PlayerEntity> outlet;
+        float closest = std::numeric_limits<float>::max();
+        for (auto& p : defense) {
+            if (p == inbounder) continue;
+            float d = p->pos.DistanceTo(attackHoop);
+            if (d < closest) { closest = d; outlet = p; }
+        }
+        if (inbounder && outlet) {
+            Vector2D from{inbounder->pos.x, inbounder->pos.y};
+            pass = PassFlight{outlet->id, inbounder->id, !shot.home, 0.0f,
+                              std::max(PASS_MIN_TIME, from.DistanceTo(outlet->pos) / PASS_SPEED), from};
+            ball.isPossessed = false;
+            ball.possessorId = -1;
+            ball.flight      = Basketball::Flight::PASS;
+            ball.position    = {from.x, from.y, 0.0f};
+        } else if (inbounder) {
+            ball.isPossessed = true;
+            ball.possessorId = inbounder->id;
+            ball.position    = {inbounder->pos.x, inbounder->pos.y, 0.0f};
+        } else {
+            ball.isPossessed = false;
+            ball.position    = {shot.hoop.x, shot.hoop.y, 0.0f};
+        }
+    } else {
+        // Miss: off the rim on a short carom toward a contestable spot, sized
+        // to its real hang time so it lands where it was aimed.
+        std::uniform_real_distribution<float> spread(-CAROM_SPREAD, CAROM_SPREAD);
+        Vector2D land = ClampToCourt({shot.hoop.x + spread(rng), shot.hoop.y + spread(rng)});
+        const float g = Basketball::GRAVITY;
+        float t = (CAROM_VZ + std::sqrt(CAROM_VZ * CAROM_VZ + 2.0f * g * RIM_Z)) / g;
+        ball.position = {shot.hoop.x, shot.hoop.y, RIM_Z};
+        ball.velocity = {(land.x - shot.hoop.x) / t, (land.y - shot.hoop.y) / t, CAROM_VZ};
+    }
+}
+
+void Court::UpdatePassFlight(float dt) {
+    auto receiver = FindPlayer(pass.receiverId);
+    if (!receiver) {   // he left the floor: it's a loose ball
+        ball.flight = Basketball::Flight::NONE;
+        return;
+    }
+    auto& team    = pass.home ? homeTeam : awayTeam;
+    auto& defense = pass.home ? awayTeam : homeTeam;
+    // The defense reacts to the catch, not the throw: while the ball is in the
+    // air it keeps guarding the passer, so a pass to an open man arrives open.
+    // (Closing out during the flight made every catch pressured, and pressure
+    // triggers the next pass: 11 passes and 3 shots a game.)
+    auto passer = FindPlayer(pass.passerId);
+    PositionTeams(team, defense, passer ? passer : receiver, pass.home ? AWAY_HOOP : HOME_HOOP, dt);
+
+    pass.t += dt;
+    float f = std::min(1.0f, pass.t / pass.duration);
+    Vector2D at = pass.from + (receiver->pos - pass.from) * f;   // chases a moving receiver
+    ball.position = {at.x, at.y, 4.0f * PASS_ARC_Z * f * (1.0f - f)};
+    if (f >= 1.0f) {
+        ball.flight      = Basketball::Flight::NONE;
+        ball.isPossessed = true;
+        ball.possessorId = receiver->id;
+        ball.position    = {receiver->pos.x, receiver->pos.y, 0.0f};
+        passCooldown     = CATCH_AND_GO;
+    }
+}
+
+// ── Separation ───────────────────────────────────────────────────────────────
+
+// Nobody stands inside anybody: overlapping players are pushed apart along
+// the line between them, half each. Two passes settle small clusters. The
+// ball carrier keeps only CARRIER_CONTACT and is never pushed himself: the
+// player in his way gives ground, so a drive moves at full speed.
+void Court::ResolveOverlaps() {
+    const int carrierId = ball.isPossessed ? ball.possessorId : -1;
+    std::vector<PlayerEntity*> all;
+    for (auto& p : homeTeam) all.push_back(p.get());
+    for (auto& p : awayTeam) all.push_back(p.get());
+    for (int iter = 0; iter < 2; iter++) {
+        for (size_t i = 0; i < all.size(); i++) {
+            for (size_t j = i + 1; j < all.size(); j++) {
+                Vector2D d    = all[j]->pos - all[i]->pos;
+                float    dist = d.Magnitude();
+                float    gap  = (all[i]->id == carrierId || all[j]->id == carrierId) ? CARRIER_CONTACT : MIN_SEPARATION;
+                if (dist >= gap) continue;
+                Vector2D n       = dist > 0.001f ? d * (1.0f / dist) : Vector2D{1.0f, 0.0f};
+                float    overlap = gap - dist;
+                if (all[i]->id == carrierId)      all[j]->pos = ClampToCourt(all[j]->pos + n * overlap);
+                else if (all[j]->id == carrierId) all[i]->pos = ClampToCourt(all[i]->pos - n * overlap);
+                else {
+                    all[i]->pos = ClampToCourt(all[i]->pos - n * (overlap * 0.5f));
+                    all[j]->pos = ClampToCourt(all[j]->pos + n * (overlap * 0.5f));
+                }
+            }
+        }
+    }
+}
+
+std::shared_ptr<PlayerEntity> Court::FindPlayer(int id, bool* isHome) {
+    for (auto& p : homeTeam) if (p->id == id) { if (isHome) *isHome = true;  return p; }
+    for (auto& p : awayTeam) if (p->id == id) { if (isHome) *isHome = false; return p; }
+    return nullptr;
 }
