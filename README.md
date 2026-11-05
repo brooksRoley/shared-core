@@ -105,3 +105,7 @@ Add this repo as a Swift Package dependency or git submodule. Enable C++ interop
 ### NbaApi (Python)
 
 Build the pybind11 module and import it in scraper.py to use the canonical `StatNormalizer` and `GameEconomy` instead of the Python reimplementation.
+
+## License
+
+[MIT](LICENSE).
